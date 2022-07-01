@@ -1,10 +1,11 @@
+//const array can push new members, but we can't assigned some new array to the const array, same for objects
 const express = require("express");
 const bp = require("body-parser");
-const { application } = require("express");
+const date = require(__dirname+"/date.js")
 
 const app = express();
-let items = ["Eat","Cook"];
-let workItems = [];
+const items = ["Eat","Cook"];
+const workItems = [];
 
 app.set("view engine","ejs");
 app.use(bp.urlencoded({extended:true}))
@@ -12,13 +13,7 @@ app.use(express.static("public"));
 
 
 app.get("/",(req,res)=>{
-    let today = new Date();
-    let options = {
-        weekday: "long",
-        day: "numeric",
-        month: "long"
-    };
-    let day=today.toLocaleDateString("en-US",options)
+    let day = date.getDay();
     res.render("list",{listTitle: day,listItems:items})
 })
 
