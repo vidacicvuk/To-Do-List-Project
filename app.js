@@ -1,49 +1,147 @@
-//const array can push new members, but we can't assigned some new array to the const array, same for objects
+//modules
 const express = require("express");
 const bp = require("body-parser");
-const date = require(__dirname+"/date.js")
+const mongoose = require("mongoose");
+const _ = require('lodash');
 
+
+//app init
 const app = express();
-const items = ["Eat","Cook"];
-const workItems = [];
-
 app.set("view engine","ejs");
 app.use(bp.urlencoded({extended:true}))
 app.use(express.static("public"));
 
+//mongoose connect
+mongoose.connect("mongodb://localhost:27017/todolistDB")
 
-app.get("/",(req,res)=>{
-    let day = date.getDay();
-    res.render("list",{listTitle: day,listItems:items})
+
+//used schemas
+const itemsSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true
+    }
 })
 
+const listSchema = {
+    name: {
+        type: String,
+        required: true
+    },
+    items: [itemsSchema]
+}
+
+//create models
+const List = mongoose.model("List",listSchema);
+const Item = mongoose.model("Item",itemsSchema);
+
+
+//default items
+const go_to_work = new Item({
+    name: "Go to Work"
+})
+const do_training = new Item({
+    name: "Do training"
+})
+const default_items = [go_to_work, do_training]
+
+//home page, main list
+app.get("/",(req,res)=>{
+    Item.find({},(err,items)=>{
+        if(err){
+            console.log(err);
+        }else{
+          if(items.length===0){
+            Item.insertMany(default_items,(err)=>{
+                if(err){
+                    console.log(err);
+                }else{
+                    console.log("Success!");
+                }
+            })
+            res.render("list",{listTitle: "Today",listItems:default_items})
+          }
+          else{
+            res.render("list",{listTitle: "Today",listItems:items})
+          }
+           
+        }
+    })
+})
+
+//post request for '/'
 app.post("/",(req,res)=>{
-    let item = req.body.listItem;
-    console.log(req.body)
-    if(req.body.list === "Work"){
-        workItems.push(item);
-        res.redirect("/work")
-    }
-    else{
-        items.push(item)
+    const new_item = req.body.listItem;
+    const listName = req.body.listName;
+
+    const item = new Item({
+        name:new_item
+    })
+    
+    if(listName!="Today"){
+        List.findOneAndUpdate({name:listName},{ $push: { items: item }},(err,foundList)=>{
+            if(err){
+                console.log(err);
+            }
+        })
+        res.redirect("/"+listName);
+    }else{
+        item.save();
         res.redirect("/");
     }
     
+})
+
+//delete item when checkbox is on
+app.post("/delete",(req,res)=>{
+    const checkedBox_id = req.body.checkedBox;
+    const listName = req.body.listName;
+
+    if(listName==="Today"){
+        Item.deleteOne({_id:checkedBox_id},(err)=>{
+            if(err){
+                console.log(err);
+            }else{
+                console.log("Successufuly deleted!")
+            }
+        })
+        res.redirect("/");
+    }else{
+        List.findOneAndUpdate({name:listName},{ $pull: { items: {_id: checkedBox_id} }},(err,foundList)=>{
+            if(err){
+                console.log(err);
+            }else{
+                res.redirect("/"+listName);
+            }
+        })
+        
+    }
     
 })
 
-
-app.get("/work",(req,res)=>{
-
-    res.render("list",{listTitle: "Work list:",listItems:workItems})
+//create custom list
+app.get("/:customListName",(req,res)=>{
+    const customListname = _.capitalize(req.params.customListName);
+    List.findOne({name:customListname},(err,foundList)=>{
+        if(!err){
+            if(!foundList){
+                //Create a new list
+                const list = new List({
+                    name: customListname,
+                    items: [go_to_work,do_training]
+                })
+                list.save();
+                res.render("list",{listTitle: customListname,listItems:list.items})
+            }else{
+                //Show an existing list
+                res.render("list",{listTitle: customListname,listItems:foundList.items})
+            }
+        }
+    })
+    
 })
 
-app.post("/work",(req,res)=>{
-    let item = req.body.listItem;
-    workItems.push(item);
-    res.redirect("/work");
-})
-
+//listen host 3000
 app.listen(3000,()=>{
     console.log("Server is running on port 3000!")
 })
